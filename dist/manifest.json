@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name":"Clipper",
+  "version": "0.1",
+  "description": "Seamless stream and media clipping.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Clipper"
+  },
+"permissions": [
+    "storage",
+    "cookies",
+    "downloads",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/*",
+    "*://*.tiktok.com/*",
+    "*://*.instagram.com/*",
+    "*://*.twitch.tv/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+    "icons": {
+  "128": "Scissors.png"
+},
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.tiktok.com/*",
+        "*://*.instagram.com/*",
+        "*://*.twitch.tv/*"
+      ],
+      "css": ["style.css"],
+      "js": ["content.js"]
+    }
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+P",
+        "mac": "Command+P"
+      },
+      "description": "Open Quick Download Menu"
+    }
+  }
+}
