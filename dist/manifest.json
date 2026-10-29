@@ -19,7 +19,8 @@
     "*://*.tiktok.com/*",
     "*://*.instagram.com/*",
     "*://*.twitch.tv/*",
-    "*://*.ttvnw.net/*"
+    "*://*.ttvnw.net/*",
+    "*://*.cloudfront.net/*"
   ],
   "background": {
     "service_worker": "background.js"
