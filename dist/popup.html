@@ -6,17 +6,16 @@
 </head>
 <body>
     <h3><img src="https://www.svgrepo.com/show/138206/cutting-with-a-scissor-on-broken-line.svg" class="icon-white" height="40px" width="20px" alt="scissors"></h3>
-    <div class="input-group">
-        <div>
-            <label>Start Time</label>
-            <input type="text" id="start-time" placeholder="HH:MM:SS">
-        </div>
-        <div>
-            <label>End Time</label>
-            <input type="text" id="end-time" placeholder="HH:MM:SS">
-        </div>
+    <div class="input-group" style="flex-direction: column; gap: 5px;">
+        <label for="clip-duration">Capture backwards from now:</label>
+        <select id="clip-duration" style="width: 100%; padding: 8px; background: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 4px; outline: none;">
+            <option value="30">Last 30 Seconds</option>
+            <option value="60">Last 60 Seconds</option>
+            <option value="120">Last 2 Minutes</option>
+            <option value="300">Last 5 Minutes</option>
+        </select>
     </div>
-    <button id="clip-btn">Clip Video</button>
+    <button id="clip-btn">Clip That!</button>
     <script src="popup.js"></script>
 </body>
 </html>

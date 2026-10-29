@@ -43,54 +43,77 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
             fetch(targetManifest)
             .then(res => res.text())
-            .then(manifestText => {
-                console.log("[Clipper] Manifest loaded. Parsing chunks...");
+            .then(async (manifestText) => {
+                let workingManifest = manifestText;
+                let baseUrl = targetManifest.substring(0, targetManifest.lastIndexOf('/') + 1);
+
+                // 1. Check if this is a Master Playlist (contains other m3u8 files instead of chunks)
+                if (workingManifest.includes('#EXT-X-STREAM-INF')) {
+                    console.log("[Clipper] Master playlist detected. Routing to highest quality...");
+                    const lines = workingManifest.split('\n');
+                    let resolutionUrl = '';
+                    
+                    for (let i = 0; i < lines.length; i++) {
+                        // Grab the first resolution playlist it offers (usually the highest)
+                        if (lines[i].includes('.m3u8')) {
+                            resolutionUrl = lines[i].trim();
+                            if (!resolutionUrl.startsWith('http')) {
+                                resolutionUrl = baseUrl + resolutionUrl;
+                            }
+                            break;
+                        }
+                    }
+
+                    if (resolutionUrl) {
+                        const subRes = await fetch(resolutionUrl);
+                        workingManifest = await subRes.text();
+                        // Update the baseUrl for the new chunks
+                        baseUrl = resolutionUrl.substring(0, resolutionUrl.lastIndexOf('/') + 1);
+                    }
+                }
+
+                console.log("[Clipper] Target playlist loaded. Parsing chunks...");
                 
                 let chunksToDownload = [];
                 
-                // Currently focusing on HLS (.m3u8) streams
-                if (targetManifest.includes('.m3u8')) {
-                    const lines = manifestText.split('\n');
-                    let currentTime = 0; // Tracks our position in the video
+                if (workingManifest.includes('#EXTINF')) {
+                    const lines = workingManifest.split('\n');
+                    let currentTime = 0; 
 
                     for (let i = 0; i < lines.length; i++) {
                         const line = lines[i].trim();
                         
-                        // Look for the duration marker
                         if (line.startsWith('#EXTINF:')) {
                             const duration = parseFloat(line.split(':')[1].split(',')[0]);
                             
-                            // Check if this chunk falls inside the user's selected timecode
                             if (currentTime + duration >= message.start && currentTime <= message.end) {
                                 let chunkUrl = lines[i + 1].trim();
                                 
-                                // If the URL is relative (e.g., "chunk_4.ts"), attach the base domain to it
                                 if (!chunkUrl.startsWith('http')) {
-                                    const baseUrl = targetManifest.substring(0, targetManifest.lastIndexOf('/') + 1);
                                     chunkUrl = baseUrl + chunkUrl;
                                 }
                                 chunksToDownload.push(chunkUrl);
                             }
                             
                             currentTime += duration;
-                            
-                            // Stop doing math once we've passed the end time
                             if (currentTime > message.end) break;
                         }
                     }
                     
-                    console.log(`[Clipper] Success! Found ${chunksToDownload.length} chunks for your time range.`);
-                    sendResponse({ status: `Found ${chunksToDownload.length} chunks!` });
+                    console.log(`[Clipper] Success! Found ${chunksToDownload.length} chunks.`);
+                    sendResponse({ 
+                        status: `Found ${chunksToDownload.length} chunks!`,
+                        chunks: chunksToDownload 
+                    });
                 } else {
-                    console.log("[Clipper] MPD/DASH parsing coming next.");
-                    sendResponse({ status: "MPD not yet supported" });
+                    sendResponse({ status: "Invalid Manifest Format" });
                 }
             })
             .catch(err => {
                 console.error("Failed to fetch manifest", err);
                 sendResponse({ status: "Fetch Error" });
             });
-        });
+        })
 
         // Tells Chrome to keep the messaging channel open until the async fetch finishes
         return true; 
