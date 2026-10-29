@@ -37,7 +37,7 @@ input[type="text"] {
     box-sizing: border-box; 
     background: #2d2d2d; 
     border: 1px solid #444; 
-    color: transparent; 
+    color: #fff; 
     border-radius: 4px; 
     text-align: center; 
 }

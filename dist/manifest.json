@@ -13,11 +13,13 @@
     "downloads",
     "webRequest"
   ],
-  "host_permissions": [
+"host_permissions": [
     "*://*.youtube.com/*",
+    "*://*.googlevideo.com/*",
     "*://*.tiktok.com/*",
     "*://*.instagram.com/*",
-    "*://*.twitch.tv/*"
+    "*://*.twitch.tv/*",
+    "*://*.ttvnw.net/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -33,7 +35,6 @@
         "*://*.instagram.com/*",
         "*://*.twitch.tv/*"
       ],
-      "css": ["style.css"],
       "js": ["content.js"]
     }
   ],
