@@ -17,6 +17,8 @@
     "*://*.youtube.com/*",
     "*://*.googlevideo.com/*",
     "*://*.tiktok.com/*",
+    "*://*.tiktokcdn.com/*",
+    "*://*.tiktokv.com/*",
     "*://*.instagram.com/*",
     "*://*.twitch.tv/*",
     "*://*.ttvnw.net/*",
