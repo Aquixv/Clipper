@@ -1,6 +1,68 @@
 document.addEventListener('DOMContentLoaded', () => {
+    const retroUi = document.getElementById('retro-ui');
+    const recordUi = document.getElementById('record-ui');
     const clipBtn = document.getElementById('clip-btn');
+    const recordBtn = document.getElementById('record-btn');
     const durationSelect = document.getElementById('clip-duration');
+
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const activeTab = tabs[0];
+        if (!activeTab) return;
+
+        // Route TikTok to the manual recording UI
+        if (activeTab.url.includes('tiktok.com')) {
+            recordUi.style.display = 'block';
+            
+            // Sync button state if user closed and reopened the popup
+            chrome.tabs.sendMessage(activeTab.id, { action: "CHECK_RECORD_STATE" }, (res) => {
+                if (res && res.isRecording) {
+                    recordBtn.innerText = "Stop Recording";
+                    recordBtn.style.background = "#6c757d"; // Gray
+                    recordBtn.dataset.state = "recording";
+                } else {
+                    recordBtn.dataset.state = "idle";
+                }
+            });
+
+            recordBtn.addEventListener('click', () => {
+                if (recordBtn.dataset.state === "idle") {
+                    recordBtn.innerText = "Connecting...";
+                    
+                    // Fetch the sniffed URL from the background
+                    chrome.runtime.sendMessage({ action: "GET_TIKTOK_URL", tabId: activeTab.id }, (bgRes) => {
+                        if (!bgRes || !bgRes.url) {
+                            recordBtn.innerText = "Stream not found";
+                            setTimeout(() => recordBtn.innerText = "Start Recording", 3000);
+                            return;
+                        }
+
+                        // Send URL to content.js to start buffering
+                        chrome.tabs.sendMessage(activeTab.id, { action: "START_RECORD", url: bgRes.url }, () => {
+                            recordBtn.innerText = "Stop Recording";
+                            recordBtn.style.background = "#6c757d";
+                            recordBtn.dataset.state = "recording";
+                        });
+                    });
+                } else {
+                    recordBtn.innerText = "Saving...";
+                    // Stop buffering and trigger download
+                    chrome.tabs.sendMessage(activeTab.id, { action: "STOP_RECORD" }, () => {
+                        recordBtn.innerText = "Clip Saved! ✅";
+                        recordBtn.style.background = "#28a745"; // Green
+                        setTimeout(() => {
+                            recordBtn.innerText = "Start Recording";
+                            recordBtn.style.background = "#dc3545"; // Red
+                            recordBtn.dataset.state = "idle";
+                        }, 3000);
+                    });
+                }
+            });
+            return; // Stop executing so the Twitch listener below doesn't attach
+        }
+
+        retroUi.style.display = 'block';
+    
+    });
 
     clipBtn.addEventListener('click', () => {
         const duration = parseInt(durationSelect.value);
@@ -78,4 +140,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
-//Filler

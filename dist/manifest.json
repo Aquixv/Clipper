@@ -47,7 +47,7 @@
         "default": "Ctrl+Q",
         "mac": "Command+Q"
       },
-      "description": "Open Quick Download Menu"
+      "description": "Open Quick Clipper Menu"
     }
   }
 }
