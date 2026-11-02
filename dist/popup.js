@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     chrome.runtime.sendMessage({ 
                         action: "PROCESS_CLIP", 
                         tabId: tabs[0].id, 
+                        url: tabs[0].url, // <-- Change this line
                         start: startSec, 
                         end: endSec 
                     }, async (response) => {
