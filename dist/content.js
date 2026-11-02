@@ -1,57 +1,119 @@
 let isRecording = false;
-let abortController = null;
+let mediaRecorder = null;
 let recordedChunks = [];
+let floatingBtn = null;
+
+// --- FLOATING BUTTON UI ---
+function createFloatingButton() {
+    if (document.getElementById('clipper-float-btn')) return; // Prevent duplicates
+    floatingBtn = document.createElement('button');
+    floatingBtn.id = 'clipper-float-btn';
+    floatingBtn.innerText = "🛑";
+    floatingBtn.style.cssText = `
+        position: fixed; top: 20px; right: 20px; z-index: 999999;
+        padding: 12px 20px; background: #dc3545; color: white;
+        border: none; border-radius: 8px; font-weight: bold; font-family: sans-serif;
+        cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+    `;
+    floatingBtn.addEventListener('click', stopRecording);
+    document.body.appendChild(floatingBtn);
+}
+
+function removeFloatingButton() {
+    if (floatingBtn) {
+        floatingBtn.remove();
+        floatingBtn = null;
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+    }
+    isRecording = false;
+    removeFloatingButton();
+}
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "GET_VIDEO_STATE") {
         const video = document.querySelector('video');
-        const currentTime = video ? video.currentTime : 0;
-        sendResponse({ url: window.location.href, time: currentTime });
+        sendResponse({ url: window.location.href, time: video ? video.currentTime : 0 });
     
     } else if (request.action === "CHECK_RECORD_STATE") {
-        // Tells the popup if we are currently recording so the button matches
         sendResponse({ isRecording });
     
+    // --- TIKTOK MEDIARECORDER ---
     } else if (request.action === "START_RECORD") {
-        isRecording = true;
-        recordedChunks = [];
-        abortController = new AbortController();
-        
-        // Open a continuous pipeline to the FLV file
-        fetch(request.url, { signal: abortController.signal }).then(async res => {
-            const reader = res.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                recordedChunks.push(value); // Buffer binary data in the webpage's RAM
-            }
-        }).catch(err => {
-            if (err.name !== 'AbortError') console.error("Recording error:", err);
-        });
-        
-        sendResponse({ status: "Started" });
+        const video = document.querySelector('video');
+        if (!video) {
+            console.error("[Clipper] No video element found on page");
+            sendResponse({ status: "Error" });
+            return;
+        }
+
+        try {
+            // Intercept the browser's live video feed
+            const stream = video.captureStream();
+            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+            recordedChunks = [];
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data.size > 0) recordedChunks.push(e.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `TikTok_Live_${Date.now()}.webm`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
+            };
+
+            mediaRecorder.start();
+            isRecording = true;
+            createFloatingButton();
+            sendResponse({ status: "Started" });
+        } catch (err) {
+            console.error("[Clipper] MediaRecorder failed:", err);
+            sendResponse({ status: "Error" });
+        }
     
     } else if (request.action === "STOP_RECORD") {
-        if (abortController) abortController.abort(); // Cut the network pipe
-        isRecording = false;
-        
-        if (recordedChunks.length > 0) {
-            // Smash the binary arrays together into a single FLV video
-            const blob = new Blob(recordedChunks, { type: 'video/x-flv' });
-            const url = URL.createObjectURL(blob);
-            
-            // Generate a hidden link and click it to trigger the native Chrome download UI
-            const a = document.createElement('a');
-            a.style.display = 'none';
-            a.href = url;
-            a.download = `TikTok_Live_${Date.now()}.flv`;
-            document.body.appendChild(a);
-            a.click();
-            
-            // Clean up memory
-            setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
-        }
+        stopRecording();
         sendResponse({ status: "Stopped" });
+    
+    // --- TWITCH BACKGROUND STITCHING ---
+    } else if (request.action === "DOWNLOAD_CHUNKS") {
+        (async () => {
+            try {
+                let combinedBuffers = [];
+                const totalChunks = request.chunks.length;
+                
+                for (let i = 0; i < totalChunks; i++) {
+                    const chunkRes = await fetch(request.chunks[i]);
+                    combinedBuffers.push(await chunkRes.arrayBuffer());
+                }
+
+                const blob = new Blob(combinedBuffers, { type: 'video/mp2t' });
+                const blobUrl = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = blobUrl;
+                a.download = request.filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
+            } catch (err) {
+                console.error("[Clipper] Stitching failed:", err);
+            }
+        })();
+        sendResponse({ status: "Downloading in background..." });
     }
     return true; 
 });
