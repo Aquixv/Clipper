@@ -9,22 +9,25 @@
     
     <!-- Twitch / YouTube UI -->
     <div id="retro-ui" style="display: none;">
-        <div class="input-group" style="flex-direction: column; gap: 5px;">
+        <div class="input-group">
             <label for="clip-duration">Capture backwards from now:</label>
-            <select id="clip-duration" style="width: 100%; padding: 8px; background: #2d2d2d; border: 1px solid #444; color: #fff; border-radius: 4px; outline: none;">
+            <select id="clip-duration">
                 <option value="30">Last 30 Seconds</option>
                 <option value="60">Last 60 Seconds</option>
                 <option value="120">Last 2 Minutes</option>
                 <option value="300">Last 5 Minutes</option>
+                <option value="custom">Custom...</option>
             </select>
+            <input type="number" id="custom-minutes" placeholder="Minutes (e.g. 10)" style="display: none;">
         </div>
-        <button id="clip-btn">Clip That!</button>
+<button id="clip-btn" class="primary-btn">Clip That!</button>
+        <button id="cancel-btn" class="danger-btn" style="display: none; margin-top: 10px;">Cancel Download</button>
     </div>
 
-    <!-- TikTok / FLV UI -->
+    <!-- TikTok UI -->
     <div id="record-ui" style="display: none;">
-        <p style="font-size: 11px; color: #aaa; margin-bottom: 10px; text-align: center;">Continuous stream detected. Manual recording required.</p>
-        <button id="record-btn" style="background: #dc3545;">Start Recording</button>
+        <p class="warning-text">Continuous stream detected. Manual recording required.</p>
+        <button id="record-btn" class="danger-btn" data-state="idle">Start Recording</button>
     </div>
 
     <script src="popup.js"></script>

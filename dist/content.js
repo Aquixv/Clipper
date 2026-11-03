@@ -1,21 +1,23 @@
 let isRecording = false;
+let isDownloadingTwitch = false;
 let mediaRecorder = null;
+let twitchAbortController = null;
 let recordedChunks = [];
 let floatingBtn = null;
 
-// --- FLOATING BUTTON UI ---
-function createFloatingButton() {
-    if (document.getElementById('clipper-float-btn')) return; // Prevent duplicates
+// --- DYNAMIC FLOATING BUTTON UI ---
+function createFloatingButton(text, callback) {
+    if (document.getElementById('clipper-float-btn')) return; 
     floatingBtn = document.createElement('button');
     floatingBtn.id = 'clipper-float-btn';
-    floatingBtn.innerText = "🛑";
+    floatingBtn.innerText = text;
     floatingBtn.style.cssText = `
         position: fixed; top: 20px; right: 20px; z-index: 999999;
         padding: 12px 20px; background: #dc3545; color: white;
         border: none; border-radius: 8px; font-weight: bold; font-family: sans-serif;
-        cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.3); transition: 0.2s;
     `;
-    floatingBtn.addEventListener('click', stopRecording);
+    floatingBtn.addEventListener('click', callback);
     document.body.appendChild(floatingBtn);
 }
 
@@ -26,12 +28,18 @@ function removeFloatingButton() {
     }
 }
 
+// --- CANCELLATION HANDLERS ---
 function stopRecording() {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        mediaRecorder.stop();
-    }
+    if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
     isRecording = false;
     removeFloatingButton();
+}
+
+function cancelTwitchDownload() {
+    isDownloadingTwitch = false;
+    if (twitchAbortController) twitchAbortController.abort(); // Kills active network fetches
+    removeFloatingButton();
+    console.log("[Clipper] Twitch download cancelled by user.");
 }
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -45,14 +53,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     // --- TIKTOK MEDIARECORDER ---
     } else if (request.action === "START_RECORD") {
         const video = document.querySelector('video');
-        if (!video) {
-            console.error("[Clipper] No video element found on page");
-            sendResponse({ status: "Error" });
-            return;
-        }
+        if (!video) return sendResponse({ status: "Error" });
 
         try {
-            // Intercept the browser's live video feed
             const stream = video.captureStream();
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
             recordedChunks = [];
@@ -67,7 +70,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const a = document.createElement('a');
                 a.style.display = 'none';
                 a.href = url;
-                a.download = `TikTok_Live_${Date.now()}.webm`;
+                a.download = `Clipped_Live_${Date.now()}.webm`;
                 document.body.appendChild(a);
                 a.click();
                 setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 1000);
@@ -75,7 +78,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
             mediaRecorder.start();
             isRecording = true;
-            createFloatingButton();
+            createFloatingButton("🛑 Stop Recording", stopRecording);
             sendResponse({ status: "Started" });
         } catch (err) {
             console.error("[Clipper] MediaRecorder failed:", err);
@@ -86,15 +89,31 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         stopRecording();
         sendResponse({ status: "Stopped" });
     
-    // --- TWITCH BACKGROUND STITCHING ---
+    // --- TWITCH BACKGROUND STITCHING (WITH ABORT) 
+} else if (request.action === "CHECK_DOWNLOAD_STATE") {
+        sendResponse({ isDownloading: isDownloadingTwitch });
+        
+    } else if (request.action === "CANCEL_DOWNLOAD") {
+        cancelTwitchDownload();
+        sendResponse({ status: "Cancelled" });
+
+    // --- TWITCH BACKGROUND STITCHING (WITH ABORT) ---
     } else if (request.action === "DOWNLOAD_CHUNKS") {
+        isDownloadingTwitch = true;
+        twitchAbortController = new AbortController();
+
         (async () => {
             try {
                 let combinedBuffers = [];
                 const totalChunks = request.chunks.length;
                 
                 for (let i = 0; i < totalChunks; i++) {
-                    const chunkRes = await fetch(request.chunks[i]);
+                    if (!isDownloadingTwitch) throw new Error("Cancelled by user");
+                    
+                    // Update button UI to show progress
+                    if (floatingBtn) floatingBtn.innerText = `🛑 Cancel (${i + 1}/${totalChunks})`;
+                    
+                    const chunkRes = await fetch(request.chunks[i], { signal: twitchAbortController.signal });
                     combinedBuffers.push(await chunkRes.arrayBuffer());
                 }
 
@@ -110,7 +129,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 
                 setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
             } catch (err) {
-                console.error("[Clipper] Stitching failed:", err);
+                if (err.name === 'AbortError' || err.message === "Cancelled by user") {
+                    console.log("[Clipper] Download aborted successfully.");
+                } else {
+                    console.error("[Clipper] Stitching failed:", err);
+                }
+            } finally {
+                isDownloadingTwitch = false;
+                removeFloatingButton();
             }
         })();
         sendResponse({ status: "Downloading in background..." });

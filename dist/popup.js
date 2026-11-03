@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!activeTab) return;
 
         // --- TIKTOK UI (MediaRecorder) ---
-        if (activeTab.url.includes('tiktok.com')) {
+        if (activeTab.url.includes('tiktok.com') || activeTab.url.includes('youtube.com')) {
             recordUi.style.display = 'block';
             
             chrome.tabs.sendMessage(activeTab.id, { action: "CHECK_RECORD_STATE" }, (res) => {
@@ -47,11 +47,38 @@ document.addEventListener('DOMContentLoaded', () => {
             return; 
         }
 
-        // --- TWITCH UI (Retroactive Chunks) ---
+// --- TWITCH UI (Retroactive Chunks) ---
         retroUi.style.display = 'block';
+        const customMinutes = document.getElementById('custom-minutes');
+        const cancelBtn = document.getElementById('cancel-btn');
+
+        durationSelect.addEventListener('change', () => {
+            customMinutes.style.display = durationSelect.value === 'custom' ? 'block' : 'none';
+        });
+
+        // 1. Check if a download is already running when the popup opens
+        chrome.tabs.sendMessage(activeTab.id, { action: "CHECK_DOWNLOAD_STATE" }, (res) => {
+            if (res && res.isDownloading) {
+                clipBtn.innerText = "Downloading in background...";
+                clipBtn.disabled = true;
+                cancelBtn.style.display = 'block';
+            }
+        });
         
         clipBtn.addEventListener('click', () => {
-            const duration = parseInt(durationSelect.value);
+            let duration = 0;
+            if (durationSelect.value === 'custom') {
+                const mins = parseFloat(customMinutes.value);
+                if (!mins || mins <= 0) {
+                    clipBtn.innerText = "Enter valid minutes";
+                    setTimeout(() => clipBtn.innerText = "Clip That!", 2000);
+                    return;
+                }
+                duration = mins * 60; 
+            } else {
+                duration = parseInt(durationSelect.value);
+            }
+
             clipBtn.innerText = "Grabbing Timestamp...";
             clipBtn.disabled = true;
 
@@ -79,17 +106,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         return;
                     }
 
-                    // Hand chunks to the webpage so the popup can close
+                    // 2. Show the cancel button and start the download
+                    clipBtn.innerText = "Downloading...";
+                    cancelBtn.style.display = 'block';
+
                     chrome.tabs.sendMessage(activeTab.id, { 
                         action: "DOWNLOAD_CHUNKS", 
                         chunks: response.chunks,
                         filename: `Clipped_${duration}s_from_${Math.floor(endSec)}.ts`
                     }, () => {
-                        clipBtn.innerText = "Check Page! ✅";
+                        clipBtn.innerText = "Clip Saved! ✅";
+                        cancelBtn.style.display = 'none';
                         setTimeout(() => { clipBtn.innerText = "Clip That!"; clipBtn.disabled = false; }, 2000);
                     });
                 });
             });
+        });
+
+        // 3. The Cancel Action
+        cancelBtn.addEventListener('click', () => {
+            chrome.tabs.sendMessage(activeTab.id, { action: "CANCEL_DOWNLOAD" });
+            cancelBtn.style.display = 'none';
+            clipBtn.innerText = "Cancelled ❌";
+            setTimeout(() => { clipBtn.innerText = "Clip That!"; clipBtn.disabled = false; }, 2000);
         });
     });
 });
