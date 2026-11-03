@@ -98,6 +98,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         sendResponse({ status: "Cancelled" });
 
     // --- TWITCH BACKGROUND STITCHING (WITH ABORT) ---
+   // --- TWITCH BACKGROUND STITCHING (WITH ABORT) ---
     } else if (request.action === "DOWNLOAD_CHUNKS") {
         isDownloadingTwitch = true;
         twitchAbortController = new AbortController();
@@ -109,10 +110,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 
                 for (let i = 0; i < totalChunks; i++) {
                     if (!isDownloadingTwitch) throw new Error("Cancelled by user");
-                    
-                    // Update button UI to show progress
-                    if (floatingBtn) floatingBtn.innerText = `🛑 Cancel (${i + 1}/${totalChunks})`;
-                    
                     const chunkRes = await fetch(request.chunks[i], { signal: twitchAbortController.signal });
                     combinedBuffers.push(await chunkRes.arrayBuffer());
                 }
@@ -128,18 +125,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 a.click();
                 
                 setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 1000);
+                sendResponse({ status: "Done" }); // <-- Triggers "Clip Saved!"
             } catch (err) {
-                if (err.name === 'AbortError' || err.message === "Cancelled by user") {
-                    console.log("[Clipper] Download aborted successfully.");
-                } else {
-                    console.error("[Clipper] Stitching failed:", err);
-                }
+                console.log("[Clipper] Download aborted or failed.");
+                sendResponse({ status: "Failed" }); 
             } finally {
                 isDownloadingTwitch = false;
-                removeFloatingButton();
             }
         })();
-        sendResponse({ status: "Downloading in background..." });
+        
+        return true; // Tells Chrome to wait for the async sendResponse
     }
     return true; 
 });
